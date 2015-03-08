@@ -1,5 +1,5 @@
 (function () {
-	"use strict";
+	'use strict';
 
 	var STATES = {
 		PENDING: 'p',
@@ -7,129 +7,95 @@
 		REJECTED: 'r'
 	};
 
-	var isFunction = function (obj) {
-		return obj && typeof obj === 'function';
+	var is = function (type, obj) {
+		return obj && typeof obj === type;
 	};
 
-	var isObject = function (obj) {
-		return obj && typeof obj === 'object';
-	};
-
-	var callWith = function () {
-		var args = [].slice.call(arguments, 0);
+	var isFunction = is.bind(null, 'function');
+	var isObject = is.bind(null, 'object');
+	
+	var onceGroup = function () {
+		var executed = false;
 		return function (fn) {
-			return fn.apply(null, args);
-		};
-	};
-
-	var when = function (condition, fn) {
-		return function () {
-			if (condition()) {
-				return fn.apply(null, arguments);
-			}
+			return function () {
+				if (!executed) {
+					executed = true;
+					fn.apply(null, arguments);
+				}
+			};
 		};
 	};
 
 	var promise = function (fn) {
 		var state = STATES.PENDING,
-			successCallbacksQueue = [],
-			errorCallbacksQueue = [],
-			value,
-			reason;
+			callbacksQueue = {},
+			value;
+
+		callbacksQueue[STATES.FULFILLED] = [];
+		callbacksQueue[STATES.REJECTED] = [];
 		
 		var then = function (successCallback, errorCallback) {
-			var hasSuccessCallback = isFunction(successCallback);
-			var hasErrorCallback = isFunction(errorCallback);
-
 			return promise(function(resolve, reject) {
-				var onFulfill = function (value) {
+				var safeCb = function (cb, fallBack, promiseValue) {
 					try {
-						if (hasSuccessCallback) {
-							resolve(successCallback(value));
+						if (isFunction(cb)) {
+							resolve(cb(promiseValue));
 						} else {
-							resolve(value);
+							fallBack(promiseValue);
 						}
 					} catch (ex) {
 						reject(ex);
 					}
 				};
-				var onReject = function (reason) {
-					try {
-						if (hasErrorCallback) {
-							resolve(errorCallback(reason));
-						} else {
-							reject(reason);
-						}
-					} catch (ex) {
-						reject(ex);
-					}
-				};
+				var onFulfill = safeCb.bind(null, successCallback, resolve);
+				var onReject = safeCb.bind(null, errorCallback, reject);
 
 				if (state === STATES.PENDING) {
-					successCallbacksQueue.push(onFulfill);
-					errorCallbacksQueue.push(onReject);
+					callbacksQueue[STATES.FULFILLED].push(onFulfill);
+					callbacksQueue[STATES.REJECTED].push(onReject);
 				} else if (state === STATES.FULFILLED) {
 					setTimeout(onFulfill.bind(null, value), 0);
 				} else if (state === STATES.REJECTED) {
-					setTimeout(onReject.bind(null, reason), 0);
+					setTimeout(onReject.bind(null, value), 0);
 				}
 			});
 		};
 
-		var isInState = function (validState) {
-			return function () {
-				return validState === state;
-			};
-		};
-
-		var resolve = when(isInState(STATES.PENDING), function (promiseValue) {
-			var doResolve = function (promiseValue) {
-				state = STATES.FULFILLED;
+		var transitionTo = function (newState, promiseValue) {
+			if (state === STATES.PENDING) {
+				state = newState;
 				value = promiseValue;
 				setTimeout(function () {
-					successCallbacksQueue.forEach(callWith(value));
+					callbacksQueue[state].forEach(function (cb) {
+						cb(value);
+					});
 				}, 0);
-			};
-			var handled = false;
+			}
+		};
+
+		var resolve = function (promiseValue) {
+			var doResolve = transitionTo.bind(null, STATES.FULFILLED);
 
 			if (promiseValue === self) {
 				reject(new TypeError());
 			} else if (!isFunction(promiseValue) && !isObject(promiseValue)) {
 				doResolve(promiseValue);
 			} else {
+				var onlyOne = onceGroup();
 				try {
 					var then = promiseValue.then;
 					if (isFunction(then)) {
-						then.call(promiseValue, function(promiseValue) {
-							if (!handled) {
-								resolve(promiseValue);
-								handled = true;
-							}
-						}, function (reason) {
-							if (!handled) {
-								reject(reason);
-								handled = true;
-							}
-						});
+						then.call(promiseValue, onlyOne(resolve), onlyOne(reject));
 					} else {
 						doResolve(promiseValue);
-						handled = true;
 					}
 				} catch (ex) {
-					if (!handled) {
-						reject(ex);
-					}
+					onlyOne(reject)(ex);
 				}
 			}
-		});
+		};
 
-		var reject = when(isInState(STATES.PENDING), function (rejectReason) {
-			state = STATES.REJECTED;
-			reason = rejectReason;
-			setTimeout(function () {
-				errorCallbacksQueue.forEach(callWith(reason));
-			}, 0);
-		});
+		var reject = transitionTo.bind(null, STATES.REJECTED);
 
 		if (fn) {
 			fn(resolve, reject);
@@ -144,7 +110,6 @@
 
 		return self;
 	};
-
 
 	if (typeof define === 'function' && typeof define.amd === 'object' && define.amd) {
 		define(function() {
