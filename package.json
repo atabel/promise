@@ -1,7 +1,11 @@
 {
   "name": "promise",
-  "version": "1.0.0",
-  "description": "a promises lib",
+  "version": "0.0.1",
+  "description": "A tiny Promises/A+ compliant lib",
+  "repository": {
+    "type" : "git",
+    "url" : "https://github.com/atabel/promise.git"
+  },
   "main": "promise.js",
   "devDependencies": {
     "promises-aplus-tests": "*"
@@ -11,7 +15,8 @@
   },
   "keywords": [
     "promise",
-    "Promises/A+"
+    "Promises/A+",
+    "promises-aplus"
   ],
   "author": "atabel87@gmail.com",
   "license": "MIT"
