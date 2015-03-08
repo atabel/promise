@@ -1,0 +1,18 @@
+{
+  "name": "promise",
+  "version": "1.0.0",
+  "description": "a promises lib",
+  "main": "promise.js",
+  "devDependencies": {
+    "promises-aplus-tests": "*"
+  },
+  "scripts": {
+    "test": "promises-aplus-tests test/promise-adapter"
+  },
+  "keywords": [
+    "promise",
+    "Promises/A+"
+  ],
+  "author": "atabel87@gmail.com",
+  "license": "MIT"
+}
